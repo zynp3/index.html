@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Beslenme & Spor Dashboard</title>
+  <style>
+    body { margin:0; font-family:Arial, sans-serif; background:#f3f4f6; }
+    header { background:#2563eb; color:#fff; padding:20px; text-align:center; }
+    h1 { margin:0; }
+    .dashboard { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:20px; padding:20px; }
+    .card { background:#fff; padding:20px; border-radius:12px; box-shadow:0 4px 8px rgba(0,0,0,0.1); }
+    .card h2 { margin-top:0; font-size:18px; color:#2563eb; }
+    input, select, button { width:100%; padding:8px; margin:6px 0; border-radius:8px; border:1px solid #ccc; font-size:14px; }
+    button { background:#2563eb; color:#fff; border:none; cursor:pointer; font-weight:bold; }
+    button:hover { background:#1e40af; }
+    ul { list-style:none; padding:0; }
+    li { padding:6px 0; border-bottom:1px solid #eee; display:flex; justify-content:space-between; font-size:14px; }
+    .stats { display:flex; justify-content:space-around; margin:10px 0; flex-wrap:wrap; }
+    .stat { background:#eef2ff; padding:10px; border-radius:8px; text-align:center; flex:1; margin:5px; }
+    .stat h3 { margin:0; color:#1e3a8a; font-size:18px; }
+    @media(max-width:600px) {
+      header { font-size:14px; padding:15px; }
+      .card { padding:15px; }
+      input, select, button { font-size:13px; }
+      .stat h3 { font-size:16px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🍎 Beslenme & Spor Dashboard</h1>
+    <p>Mobil uyumlu sağlıklı yaşam takip paneli</p>
+  </header>
+
+  <div class="dashboard">
+
+    <!-- Günlük Özet -->
+    <div class="card">
+      <h2>📊 Günlük Özet</h2>
+      <div class="stats">
+        <div class="stat"><h3 id="today-calories">0</h3><p>Kalori</p></div>
+        <div class="stat"><h3 id="meals-count">0</h3><p>Öğün</p></div>
+        <div class="stat"><h3 id="current-weight">-</h3><p>Kilo (kg)</p></div>
+        <div class="stat"><h3 id="burned-calories">0</h3><p>Spor Kalori</p></div>
+      </div>
+    </div>
+
+    <!-- Öğün Ekle -->
+    <div class="card">
+      <h2>🍽️ Öğün Ekle</h2>
+      <input type="date" id="meal-date" />
+      <input type="text" id="meal-name" placeholder="Öğün (Kahvaltı)" />
+      <input type="text" id="meal-food" placeholder="Yediklerin" />
+      <select id="meal-category">
+        <option>Protein</option><option>Karbonhidrat</option><option>Yağ</option><option>Sebze</option><option>Meyve</option>
+      </select>
+      <input type="number" id="meal-calories" placeholder="Kalori" />
+      <button onclick="addMeal()">Ekle</button>
+      <ul id="meal-list"></ul>
+    </div>
+
+    <!-- Kalori Grafiği -->
+    <div class="card">
+      <h2>🔥 Günlük Kalori Grafiği</h2>
+      <canvas id="calorieChart" height="200"></canvas>
+    </div>
+
+    <!-- Kilo Grafiği -->
+    <div class="card">
+      <h2>⚖️ Kilo Takibi</h2>
+      <input type="number" id="weight-input" placeholder="Bugünkü Kilonuz" />
+      <input type="number" id="target-weight" placeholder="Hedef Kilo" value="70" />
+      <button onclick="addWeight()">Kaydet</button>
+      <canvas id="weightChart" height="200"></canvas>
+    </div>
+
+    <!-- Spor Takibi -->
+    <div class="card">
+      <h2>🏃 Spor Takibi</h2>
+      <input type="date" id="sport-date" />
+      <input type="text" id="sport-name" placeholder="Egzersiz (Koşu)" />
+      <input type="number" id="sport-duration" placeholder="Süre (dk)" />
+      <input type="number" id="sport-calories" placeholder="Yakılan Kalori" />
+      <button onclick="addSport()">Ekle</button>
+      <ul id="sport-list"></ul>
+    </div>
+
+    <!-- Spor Grafiği -->
+    <div class="card">
+      <h2>💪 Spor Kalori Grafiği</h2>
+      <canvas id="sportChart" height="200"></canvas>
+    </div>
+  </div>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    let diary = [];
+    let weights = [];
+    let sports = [];
+
+    const calorieCtx = document.getElementById("calorieChart").getContext("2d");
+    const calorieChart = new Chart(calorieCtx, {
+      type: 'bar',
+      data: { labels: [], datasets: [{ label:"Kalori", data:[], backgroundColor:"#2563eb" }] }
+    });
+
+    const weightCtx = document.getElementById("weightChart").getContext("2d");
+    const weightChart = new Chart(weightCtx, {
+      type: 'line',
+      data: { labels: [], datasets: [
+        { label:"Kilo", data:[], borderColor:"#2563eb", fill:false, tension:0.3 },
+        { label:"Hedef", data:[], borderColor:"#16a34a", borderDash:[5,5], fill:false }
+      ]}
+    });
+
+    const sportCtx = document.getElementById("sportChart").getContext("2d");
+    const sportChart = new Chart(sportCtx, {
+      type: 'bar',
+      data: { labels: [], datasets: [{ label:"Yakılan Kalori", data:[], backgroundColor:"#f97316" }] }
+    });
+
+    function addMeal() {
+      const date = document.getElementById("meal-date").value;
+      const meal = document.getElementById("meal-name").value;
+      const food = document.getElementById("meal-food").value;
+      const category = document.getElementById("meal-category").value;
+      const calories = document.getElementById("meal-calories").value;
+      if (!date || !meal || !food || !calories) return;
+      diary.push({ date, meal, food, category, calories:Number(calories) });
+      renderMeals();
+      updateCalorieChart();
+      updateStats();
+    }
+
+    function renderMeals() {
+      const list = document.getElementById("meal-list");
+      list.innerHTML = "";
+      diary.forEach(e=>{
+        const li=document.createElement("li");
+        li.textContent=`${e.date} - ${e.meal}: ${e.food}`;
+        const span=document.createElement("span");
+        span.textContent=`${e.calories} kcal`;
+        li.appendChild(span);
+        list.appendChild(li);
+      });
+    }
+
+    function updateCalorieChart() {
+      const grouped={};
+      diary.forEach(e=>{ grouped[e.date]=(grouped[e.date]||0)+e.calories; });
+      calorieChart.data.labels=Object.keys(grouped);
+      calorieChart.data.datasets[0].data=Object.values(grouped);
+      calorieChart.update();
+    }
+
+    function updateStats() {
+      const today=new Date().toISOString().slice(0,10);
+      const todayMeals=diary.filter(e=>e.date===today);
+      const totalCalories=todayMeals.reduce((s,e)=>s+e.calories,0);
+      document.getElementById("today-calories").textContent=totalCalories;
+      document.getElementById("meals-count").textContent=todayMeals.length;
+
+      const todaySports=sports.filter(e=>e.date===today);
+      const burned=todaySports.reduce((s,e)=>s+e.calories,0);
+      document.getElementById("burned-calories").textContent=burned;
+    }
+
+    function addWeight() {
+      const w=document.getElementById("weight-input").value;
+      const t=document.getElementById("target-weight").value;
+      if(!w) return;
+      const date=new Date().toLocaleDateString();
+      weights.push({date,weight:Number(w),target:Number(t)});
+      updateWeightChart();
+      document.getElementById("current-weight").textContent=w;
+    }
+
+    function updateWeightChart() {
+      weightChart.data.labels=weights.map(w=>w.date);
+      weightChart.data.datasets[0].data=weights.map(w=>w.weight);
+      weightChart.data.datasets[1].data=weights.map(w=>w.target);
+      weightChart.update();
+    }
+
+    function addSport() {
+      const date=document.getElementById("sport-date").value;
+      const name=document.getElementById("sport-name").value;
+      const duration=document.getElementById("sport-duration").value;
+      const calories=document.getElementById("sport-calories").value;
+      if(!date || !name || !duration || !calories) return;
+      sports.push({date,name,duration:Number(duration),calories:Number(calories)});
+      renderSports();
+      updateSportChart();
+      updateStats();
+    }
+
+    function renderSports() {
+      const list=document.getElementById("sport-list");
+      list.innerHTML="";
+      sports.forEach(e=>{
+        const li=document.createElement("li");
+        li.textContent=`${e.date} - ${e.name} (${e.duration} dk)`;
+        const span=document.createElement("span");
+        span.textContent=`-${e.calories} kcal`;
+        li.appendChild(span);
+        list.appendChild(li);
+      });
+    }
+
+    function updateSportChart() {
+      const grouped={};
+      sports.forEach(e=>{ grouped[e.date]=(grouped[e.date]||0)+e.calories; });
+      sportChart.data.labels=Object.keys(grouped);
+      sportChart.data.datasets[0].data=Object.values(grouped);
+      sportChart.update();
+    }
+  </script>
+</body>
+</html>
